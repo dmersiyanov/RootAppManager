@@ -22,6 +22,15 @@ public class RootHelper {
         }
     }
 
+    public static boolean install(String apkPath) {
+        String output = executeCommand("pm install " + apkPath);
+        if (output != null && output.toLowerCase().contains("success")) {
+            return true;
+        } else {
+            return false;
+        }
+    }
+
     public static boolean uninstallSystem(File appApk) {
         executeCommand("mount -o rw,remount /system");
         executeCommand("rm " + appApk.getAbsolutePath());
@@ -35,6 +44,13 @@ public class RootHelper {
         } else {
             return false;
         }
+    }
+
+    public static boolean isRootAvalable() {
+        String result = executeCommand("id");
+        System.out.println(result);
+        if(result != null && result.contains("uid=0")) return true;
+        else return false;
     }
 
     @Nullable

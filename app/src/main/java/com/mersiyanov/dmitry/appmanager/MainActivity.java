@@ -2,12 +2,11 @@ package com.mersiyanov.dmitry.appmanager;
 
 import android.content.Intent;
 import android.net.Uri;
-import android.os.AsyncTask;
 import android.os.Build;
+import android.os.Bundle;
 import android.support.v4.content.FileProvider;
 import android.support.v4.widget.SwipeRefreshLayout;
 import android.support.v7.app.AppCompatActivity;
-import android.os.Bundle;
 import android.support.v7.widget.DividerItemDecoration;
 import android.support.v7.widget.LinearLayoutManager;
 import android.support.v7.widget.RecyclerView;
@@ -15,12 +14,10 @@ import android.support.v7.widget.SearchView;
 import android.support.v7.widget.helper.ItemTouchHelper;
 import android.util.Log;
 import android.view.Menu;
-import android.view.MenuInflater;
 import android.view.MenuItem;
 import android.widget.Toast;
 
 import java.io.File;
-import java.lang.ref.WeakReference;
 import java.util.List;
 
 public class MainActivity extends AppCompatActivity {
@@ -30,6 +27,7 @@ public class MainActivity extends AppCompatActivity {
     private AppManager appManager;
     AppsAdapter appsAdapter = new AppsAdapter();
     private SwipeRefreshLayout swipeRefreshLayout;
+    private boolean isRooted = false;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -54,6 +52,17 @@ public class MainActivity extends AppCompatActivity {
         itemTouchHelper.attachToRecyclerView(recyclerView);
 
         reloadApps();
+        rootCheck();
+
+    }
+
+    private void rootCheck() {
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                isRooted = RootHelper.isRootAvalable();
+            }
+        });
     }
 
     private final SwipeRefreshLayout.OnRefreshListener onRefreshListener = new SwipeRefreshLayout.OnRefreshListener() {
@@ -122,29 +131,36 @@ public class MainActivity extends AppCompatActivity {
 
     private void startAppInstallation(String apkPath) {
 
-        Intent installIntent = new Intent(Intent.ACTION_VIEW);
-        Uri uri;
+        if(isRooted) {
+            installWithRoot(apkPath);
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-            uri = FileProvider.getUriForFile(this,
-                    BuildConfig.APPLICATION_ID + ".provider", new File(apkPath));
-            installIntent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
         } else {
-            uri = Uri.fromFile(new File(apkPath));
+            Intent installIntent = new Intent(Intent.ACTION_VIEW);
+            Uri uri;
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                uri = FileProvider.getUriForFile(this,
+                        BuildConfig.APPLICATION_ID + ".provider", new File(apkPath));
+                installIntent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            } else {
+                uri = Uri.fromFile(new File(apkPath));
+            }
+
+            installIntent.setDataAndType(uri, "application/vnd.android.package-archive");
+            installIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK); // Создаст новый процесс
+            startActivity(installIntent);
         }
-
-        installIntent.setDataAndType(uri, "application/vnd.android.package-archive");
-        installIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK); // Создаст новый процесс
-
-        startActivity(installIntent);
     }
 
     private void startAppUninstallation(AppInfo appInfo) {
-//        Intent intent = new Intent(Intent.ACTION_UNINSTALL_PACKAGE);
-//        intent.setData(Uri.parse("package:" + appInfo.getPackageName()));
-//        startActivity(intent);
-
-        uninstallWithRoot(appInfo);
+        if(isRooted) {
+            uninstallWithRoot(appInfo);
+        } else {
+            Intent intent = new Intent(Intent.ACTION_UNINSTALL_PACKAGE);
+            intent.setData(Uri.parse("package:" + appInfo.getPackageName()));
+            startActivity(intent);
+            reloadApps();
+        }
     }
 
     private final ItemTouchHelper.Callback itemTouchHelperCallback = new ItemTouchHelper.Callback() {
@@ -170,7 +186,10 @@ public class MainActivity extends AppCompatActivity {
         uninstallAsyncTask.execute(appInfo);
     }
 
-
+    private void installWithRoot(String apkPath) {
+        InstallAsyncTask installAsyncTask = new InstallAsyncTask(installListener);
+        installAsyncTask.execute(apkPath);
+    }
 
     private final UninstallAsyncTask.UninstallListener uninstallListener = new UninstallAsyncTask.UninstallListener() {
         @Override
@@ -182,6 +201,20 @@ public class MainActivity extends AppCompatActivity {
         @Override
         public void onFailed() {
             Toast.makeText(MainActivity.this, "Не удалось удалить!", Toast.LENGTH_LONG).show();
+            reloadApps();
+        }
+    };
+
+    private final InstallAsyncTask.InstallListener installListener = new InstallAsyncTask.InstallListener() {
+        @Override
+        public void onInstalled() {
+            Toast.makeText(MainActivity.this, "Установлено!", Toast.LENGTH_LONG).show();
+            reloadApps();
+        }
+
+        @Override
+        public void onFailed() {
+            Toast.makeText(MainActivity.this, "Не удалось установить!", Toast.LENGTH_LONG).show();
             reloadApps();
         }
     };

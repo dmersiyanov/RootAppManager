@@ -18,14 +18,6 @@ public class UninstallAsyncTask extends AsyncTask<AppInfo, Void, Boolean> {
         this.uninstallListenerWeakReference = new WeakReference<>(uninstallListener);
     }
 
-
-
-    @Override
-    protected void onPreExecute() {
-        super.onPreExecute();
-    }
-
-
     @Override
     protected Boolean doInBackground(AppInfo... params) {
         AppInfo appInfo = params[0];
